@@ -1,1 +1,260 @@
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
 
+public class BlackjackGame {
+    private static final String[] CARD_CATEGORIES = {"Hearts", "Diamonds", "Clubs", "Spades"};
+    private static final String[] CARDS_LIST = {"Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"};
+    private static final Map<String, Integer> VALUES = new HashMap<>();
+
+    static {
+        VALUES.put("Ace", 11);
+        VALUES.put("2", 2);
+        VALUES.put("3", 3);
+        VALUES.put("4", 4);
+        VALUES.put("5", 5);
+        VALUES.put("6", 6);
+        VALUES.put("7", 7);
+        VALUES.put("8", 8);
+        VALUES.put("9", 9);
+        VALUES.put("10", 10);
+        VALUES.put("Jack", 10);
+        VALUES.put("Queen", 10);
+        VALUES.put("King", 10);
+    }
+
+    private static List<String[]> createDeck() {
+        List<String[]> deck = new ArrayList<>();
+        for (String category : CARD_CATEGORIES) {
+            for (String card : CARDS_LIST) {
+                deck.add(new String[]{card, category});
+            }
+        }
+        // Multiply the deck by 6 for six decks
+        List<String[]> fullDeck = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            fullDeck.addAll(deck);
+        }
+        return fullDeck;
+    }
+
+    private static int calculateScore(List<String[]> cards) {
+        int score = 0;
+        int numAces = 0;
+        for (String[] card : cards) {
+            score += VALUES.get(card[0]);
+            if (card[0].equals("Ace")) {
+                numAces++;
+            }
+        }
+        while (score > 21 && numAces > 0) {
+            score -= 10;
+            numAces--;
+        }
+        return score;
+    }
+
+    private static String formatCard(String[] card) {
+        return card[0] + " of " + card[1];
+    }
+
+    private static String formatHand(List<String[]> hand) {
+        List<String> formattedCards = new ArrayList<>();
+        for (String[] card : hand) {
+            formattedCards.add(formatCard(card));
+        }
+        return String.join(", ", formattedCards);
+    }
+
+    private static int bet(int total, int bet, String result) {
+        switch (result) {
+            case "Win":
+                return total + bet;
+            case "Lose":
+                return total - bet;
+            case "Push":
+                return total;
+            case "Blackjack":
+                return total + (int) (1.5 * bet);
+            case "DDW":
+                return total + 2 * bet;
+            case "DDL":
+                return total - 2 * bet;
+            default:
+                return total;
+        }
+    }
+
+    private static int game(List<String[]> playerCards, List<String[]> dealerCards, List<String[]> deck, CardCounter counter, int betTotal, int betAmount, Scanner scanner) {
+        if (playerCards.size() == 1) {
+            String[] newCard = deck.remove(deck.size() - 1);
+            playerCards.add(newCard);
+            counter.updateCount(Collections.singletonList(newCard));
+            int playerScore = calculateScore(playerCards);
+            System.out.println("You drew " + formatCard(newCard) + ". Your new score is " + playerScore + ".");
+        }
+
+        counter.updateCount(playerCards);
+        counter.updateCount(dealerCards);
+
+        while (true) {
+            int playerScore = calculateScore(playerCards);
+            int dealerScore = calculateScore(dealerCards);
+
+            System.out.println("Dealer's Cards: " + formatCard(dealerCards.get(0)) + ", ?");
+            System.out.println("Player's Cards: " + formatHand(playerCards) + ", Running Count: " + counter.getRunningCount() + ", True Count: " + counter.trueCount() + ", Decks Remaining: " + counter.getDecksRemaining());
+
+            if (playerScore == 21) {
+                System.out.println("Blackjack! You won!");
+                betTotal = bet(betTotal, betAmount, "Blackjack");
+                System.out.println("Your new bet total is: " + betTotal);
+                System.out.println("Recommended bet sizing: " + counter.calculateRecommendedBet(betAmount));
+                break;
+            }
+            System.out.print("What do you want to do (hit/stand/double down/split/stop)? ");
+            String choice = scanner.nextLine().toLowerCase();
+
+            if (choice.equals("stop")) {
+                return betTotal;
+            } else if (choice.equals("hit")) {
+                String[] newCard = deck.remove(deck.size() - 1);
+                playerCards.add(newCard);
+                counter.updateCount(Collections.singletonList(newCard));
+                playerScore = calculateScore(playerCards);
+                System.out.println("You drew " + formatCard(newCard) + ". Your new score is " + playerScore + ".");
+                if (playerScore > 21) {
+                    System.out.println("Bust! You lose.");
+                    betTotal = bet(betTotal, betAmount, "Lose");
+                    System.out.println("Your new bet total is: " + betTotal);
+                    System.out.println("Recommended bet sizing: " + counter.calculateRecommendedBet(betAmount));
+                    break;
+                }
+            } else if (choice.equals("stand")) {
+                System.out.println("You chose to stand.");
+                while (dealerScore < 17) {
+                    String[] newCard = deck.remove(deck.size() - 1);
+                    dealerCards.add(newCard);
+                    counter.updateCount(Collections.singletonList(newCard));
+                    dealerScore = calculateScore(dealerCards);
+                    System.out.println("Dealer drew " + formatCard(newCard) + ". Dealer's new score is " + dealerScore + ".");
+                }
+                System.out.println("Dealer's cards are: " + formatHand(dealerCards));
+                if (dealerScore > 21) {
+                    System.out.println("Dealer busts! You win!");
+                    betTotal = bet(betTotal, betAmount, "Win");
+                } else if (dealerScore > playerScore) {
+                    System.out.println("Dealer wins with " + dealerScore + "!");
+                    betTotal = bet(betTotal, betAmount, "Lose");
+                } else if (dealerScore == playerScore) {
+                    System.out.println("Push, no one wins");
+                    betTotal = bet(betTotal, betAmount, "Push");
+                } else {
+                    System.out.println("You win with " + playerScore + "!");
+                    betTotal = bet(betTotal, betAmount, "Win");
+                }
+                System.out.println("Your new bet total is: " + betTotal);
+                System.out.println("Recommended bet sizing: " + counter.calculateRecommendedBet(betAmount));
+                break;
+            } else if (choice.equals("double down")) {
+                if (playerCards.size() == 2) {
+                    String[] newCard = deck.remove(deck.size() - 1);
+                    playerCards.add(newCard);
+                    counter.updateCount(Collections.singletonList(newCard));
+                    playerScore = calculateScore(playerCards);
+                    System.out.println("You drew " + formatCard(newCard) + ". Your new score is " + playerScore + ".");
+                    if (playerScore > 21) {
+                        System.out.println("Bust! You lose.");
+                        betTotal = bet(betTotal, betAmount, "DDL");
+                    } else {
+                        while (dealerScore < 17) {
+                            newCard = deck.remove(deck.size() - 1);
+                            dealerCards.add(newCard);
+                            counter.updateCount(Collections.singletonList(newCard));
+                            dealerScore = calculateScore(dealerCards);
+                            System.out.println("Dealer drew " + formatCard(newCard) + ". Dealer's new score is " + dealerScore + ".");
+                        }
+                        System.out.println("Dealer's cards are: " + formatHand(dealerCards));
+                        if (dealerScore > 21) {
+                            System.out.println("Dealer busts! You win!");
+                            betTotal = bet(betTotal, betAmount, "DDW");
+                        } else if (dealerScore > playerScore) {
+                            System.out.println("Dealer wins with " + dealerScore + "!");
+                            betTotal = bet(betTotal, betAmount, "DDL");
+                        } else if (dealerScore == playerScore) {
+                            System.out.println("Push, no one wins");
+                            betTotal = bet(betTotal, betAmount, "Push");
+                        } else {
+                            System.out.println("You win with " + playerScore + "!");
+                            betTotal = bet(betTotal, betAmount, "DDW");
+                        }
+                    }
+                    System.out.println("Your new bet total is: " + betTotal);
+                    System.out.println("Recommended bet sizing: " + counter.calculateRecommendedBet(betAmount));
+                    break;
+                } else {
+                    System.out.println("You can only double down on your first turn.");
+                }
+            } else if (choice.equals("split")) {
+                if (VALUES.get(playerCards.get(0)[0]).equals(VALUES.get(playerCards.get(1)[0]))) {
+                    System.out.println("You have a pair!");
+                    List<String[]> hand1 = new ArrayList<>();
+                    hand1.add(playerCards.get(0));
+                    String[] newCard1 = deck.remove(deck.size() - 1);
+                    hand1.add(newCard1);
+                    counter.updateCount(Collections.singletonList(newCard1));
+
+                    List<String[]> hand2 = new ArrayList<>();
+                    hand2.add(playerCards.get(1));
+                    String[] newCard2 = deck.remove(deck.size() - 1);
+                    hand2.add(newCard2);
+                    counter.updateCount(Collections.singletonList(newCard2));
+
+                    System.out.println("Playing first hand:");
+                    betTotal = game(hand1, dealerCards, deck, counter, betTotal, betAmount, scanner);
+
+                    System.out.println("Playing second hand:");
+                    betTotal = game(hand2, dealerCards, deck, counter, betTotal, betAmount, scanner);
+                    break;
+                } else {
+                    System.out.println("You can only split if you have a pair.");
+                }
+            } else {
+                System.out.println("Invalid choice. Please choose hit, stand, double down, split, or stop.");
+            }
+        }
+
+        return betTotal;
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        CardCounter counter = new CardCounter(6);
+        List<String[]> deck = createDeck();
+        Collections.shuffle(deck);
+        System.out.print("Starting amount?: ");
+        int startingTotal = Integer.parseInt(scanner.nextLine());
+        boolean play = true;
+
+        while (play) {
+            System.out.print("How much would you like to bet on this hand?: ");
+            int betAmount = Integer.parseInt(scanner.nextLine());
+            List<String[]> playerCards = new ArrayList<>();
+            playerCards.add(deck.remove(deck.size() - 1));
+            playerCards.add(deck.remove(deck.size() - 1));
+            List<String[]> dealerCards = new ArrayList<>();
+            dealerCards.add(deck.remove(deck.size() - 1));
+            startingTotal = game(playerCards, dealerCards, deck, counter, startingTotal, betAmount, scanner);
+            if (startingTotal <= 0) {
+                System.out.println("You have run out of money. Game over.");
+                break;
+            }
+            System.out.print("Do you want to play another game? (yes/no): ");
+            play = scanner.nextLine().equalsIgnoreCase("yes");
+        }
+        System.out.println("Thanks for playing!");
+        scanner.close();
+    }
+}
